@@ -1,16 +1,19 @@
-// Elo-style skill rating. Each difficulty level has a fixed "opponent" rating;
-// beating a level above your rating gains more than beating one below it.
-const START = 1200;
-const LEVEL_RATING = { 1: 1000, 2: 1150, 3: 1300, 4: 1450, 5: 1600 };
+// Elo-style skill rating, rebased so a new tech starts at 0. Each difficulty
+// has a fixed "opponent" rating; beating a level above your own gains more than
+// beating one below it. The 400-point Elo spacing is preserved — only the
+// origin is shifted — so the math behaves exactly like standard Elo.
+const START = 0;
+const LEVEL_RATING = { 1: -200, 2: -50, 3: 100, 4: 250, 5: 400 };
 const K = 40;
 
+// Real shop hierarchy: C is entry level, A is senior, then Master above that.
 export const TITLES = [
-  [0,    'Apprentice'],
-  [1100, 'B Technician'],
-  [1250, 'A Technician'],
-  [1400, 'Master Technician'],
-  [1550, 'Shop Foreman'],
-  [1700, 'Diagnostic Specialist'],
+  [-Infinity, 'C Technician'],
+  [75,        'B Technician'],
+  [175,       'A Technician'],
+  [300,       'Master Technician'],
+  [425,       'Shop Foreman'],
+  [550,       'Diagnostic Specialist'],
 ];
 
 export function titleFor(rating) {
@@ -22,7 +25,12 @@ export function titleFor(rating) {
 export function load() {
   try {
     const raw = localStorage.getItem('sts_profile');
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const p = JSON.parse(raw);
+      // Migrate profiles saved on the old 1200-based scale.
+      if (p && typeof p.rating === 'number' && p.rating > 600) p.rating -= 1200;
+      return p;
+    }
   } catch { /* corrupt profile — start fresh */ }
   return { rating: START, jobs: [], recentCauses: [] };
 }
