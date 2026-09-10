@@ -1,4 +1,4 @@
-import { getKey, setKey, clearKey } from './api.js';
+import { getKey, setKey, clearKey, keyLooksValid } from './api.js';
 import { DIFFICULTY, generateCase, judgeDiagnosis, askCustomer, investigate } from './cases.js';
 import * as Rating from './rating.js';
 
@@ -56,7 +56,13 @@ function renderSetup() {
   $('screen-setup').classList.remove('hidden');
   $('screen-job').classList.add('hidden');
   $('key-input').value = getKey();
-  $('key-status').textContent = getKey() ? 'Key saved in this browser.' : 'No key saved.';
+  const k = getKey();
+  $('key-status').textContent = !k
+    ? 'No key saved.'
+    : keyLooksValid(k)
+      ? `Key saved (…${k.slice(-4)}).`
+      : 'Saved value does not look like an Anthropic key — keys start with sk-ant-.';
+  $('key-status').style.color = k && !keyLooksValid(k) ? 'var(--bad)' : '';
 
   $('diffgrid').innerHTML = Object.entries(DIFFICULTY).map(([n, d]) => `
     <button data-d="${n}" class="${Number(n) === difficulty ? 'sel' : ''}">
@@ -93,6 +99,10 @@ function renderHistory() {
 async function startJob() {
   clearError();
   if (!getKey()) { showError('Enter your Anthropic API key first.'); return; }
+  if (!keyLooksValid()) {
+    showError('That API key does not look right — Anthropic keys start with sk-ant-. Re-enter it above.');
+    return;
+  }
 
   busy(true, `Writing a level ${difficulty} repair order…`);
   $('start-btn').disabled = true;

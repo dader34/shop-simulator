@@ -5,6 +5,11 @@ const API_URL = 'https://api.anthropic.com/v1/messages';
 
 export function getKey() { return localStorage.getItem('sts_key') || ''; }
 export function setKey(k) { localStorage.setItem('sts_key', k.trim()); }
+
+/** Anthropic keys look like sk-ant-... and are long. Catch obvious junk early. */
+export function keyLooksValid(k = getKey()) {
+  return /^sk-ant-/.test(k) && k.length > 40;
+}
 export function clearKey() { localStorage.removeItem('sts_key'); }
 
 /**
@@ -14,6 +19,9 @@ export function clearKey() { localStorage.removeItem('sts_key'); }
 export async function ask({ system, messages, schema, effort = 'high', maxTokens = 8000, stream = false, onProgress }) {
   const key = getKey();
   if (!key) throw new Error('No API key set.');
+  if (!keyLooksValid(key)) {
+    throw new Error('The saved API key does not look like an Anthropic key (they start with sk-ant-). Re-enter it on the setup screen.');
+  }
 
   const body = {
     model: MODEL,
@@ -45,6 +53,9 @@ export async function ask({ system, messages, schema, effort = 'high', maxTokens
       const j = await res.json();
       if (j?.error?.message) detail = j.error.message;
     } catch { /* non-JSON error body */ }
+    if (res.status === 401) {
+      detail = `${detail} — check the API key on the setup screen.`;
+    }
     throw new Error(detail);
   }
 
