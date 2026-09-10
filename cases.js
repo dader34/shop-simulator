@@ -70,7 +70,7 @@ const CASE_SCHEMA = {
           name: { type: 'string', description: 'What the tech does, e.g. "Fuel pressure at rail, key on engine running".' },
           minutes: { type: 'integer', description: 'Realistic billable time for this test.' },
           parts_cost: { type: 'integer', description: 'Consumables/shop supplies in dollars, usually 0.' },
-          result: { type: 'string', description: 'The literal result the tech observes. Real numbers with units, real code descriptions. Do NOT interpret it, do NOT hint at the answer. Report what the tool says.' },
+          result: { type: 'string', description: 'The literal result the tech observes. Real numbers with units. Every DTC must include its full scan-tool description and status, e.g. "P0304 - Cylinder 4 Misfire Detected (current), P0316 - Misfire Detected On Startup (history)". Do NOT interpret it, do NOT hint at the answer. Report what the tool says.' },
         },
       },
     },
@@ -85,9 +85,10 @@ You write realistic repair-order scenarios. Absolute rules:
 1. GROUND TRUTH FIRST. Decide the actual failure, then derive every symptom, code, and test result from it deterministically. Every test result you write must be exactly what a real scan tool, meter, scope, or gauge would show given that failure. Never write a result that contradicts the root cause.
 2. NEVER TELEGRAPH. Test results are raw observations, not conclusions. Write "Fuel pressure 38 psi KOER, spec 55-62 psi" — never "Fuel pressure low, indicating a failing pump." No test result may name or hint at the root cause.
 3. RED HERRINGS MUST BE REAL. A red herring is a genuine out-of-spec or ugly finding that is not causing this complaint (a weeping valve cover gasket, a stored history code from a dead battery, a cheap aftermarket part that works fine). Include failures that would show up on a real car of that age and mileage.
-4. NUMBERS MUST BE RIGHT. Use real specifications, real DTC numbers with correct descriptions for that make, real live-data PIDs, real resistance and voltage values. If you are not certain of an exact spec, choose a value clearly in or out of range and state the spec alongside it.
-5. TEST MENU MUST BE HONEST. Include tests that lead nowhere alongside the ones that matter, so the menu itself is not a hint. Order them naturally, not by usefulness. Include at least one test whose result is completely normal.
-6. The customer complaint is written in the customer's own words with their own misunderstandings, not in technical language.`;
+4. NUMBERS MUST BE RIGHT. Use real specifications, real live-data PIDs, real resistance and voltage values. If you are not certain of an exact spec, choose a value clearly in or out of range and state the spec alongside it.
+5. ALWAYS WRITE THE CODE DESCRIPTION. Every DTC must be followed by its real description as the scan tool displays it, plus its status. Write "P0304 - Cylinder 4 Misfire Detected (current)" — never a bare "P0304". This applies everywhere a code appears, including the customer's own vague references. For BMW, give both forms: "29CD - Misfire cylinder 4 (2A87 in DME memory)". A technician must be able to read the result without already knowing the code.
+6. TEST MENU MUST BE HONEST. Include tests that lead nowhere alongside the ones that matter, so the menu itself is not a hint. Order them naturally, not by usefulness. Include at least one test whose result is completely normal.
+7. The customer complaint is written in the customer's own words with their own misunderstandings, not in technical language.`;
 
 export async function generateCase({ difficulty, focus, avoid = [], onProgress }) {
   const d = DIFFICULTY[difficulty];
@@ -152,10 +153,13 @@ const VERDICT_SCHEMA = {
   },
 };
 
-export async function judgeDiagnosis({ theCase, diagnosis, repair, testsRun, onProgress }) {
-  const ran = theCase.tests.filter((t) => testsRun.includes(t.id));
+export async function judgeDiagnosis({ theCase, diagnosis, repair, testsRun, custom = [], onProgress }) {
+  const ran = theCase.tests
+    .filter((t) => testsRun.includes(t.id))
+    .map((t) => ({ name: t.name, result: t.result }))
+    .concat(custom);
   return ask({
-    system: `You are a master technician and shop foreman evaluating a tech's diagnosis against known ground truth. You are fair but exacting: a diagnosis is correct only if it identifies the actual failed component or condition. Naming the right system but the wrong part is not correct. If a contributing fault was left unaddressed, the car comes back. Speak like a foreman on the shop floor — direct, no corporate padding, no praise the work didn't earn.`,
+    system: `You are a master technician and shop foreman evaluating a tech's diagnosis against known ground truth. You are fair but exacting: a diagnosis is correct only if it identifies the actual failed component or condition. Naming the right system but the wrong part is not correct. If a contributing fault was left unaddressed, the car comes back. Speak like a foreman on the shop floor — direct, no corporate padding, no praise the work didn't earn. Whenever you cite a DTC, include its full description, e.g. "P0304 - Cylinder 4 Misfire Detected", never a bare code.`,
     effort: 'high',
     stream: true,
     onProgress,
@@ -171,7 +175,7 @@ Red herrings: ${theCase.truth.red_herrings.join('; ') || '(none)'}
 CUSTOMER PERSONA: ${theCase.customer_persona}
 COMPLAINT: "${theCase.ro.complaint}"
 
-TESTS THE TECH ACTUALLY RAN (${ran.length} of ${theCase.tests.length}):
+TESTS THE TECH ACTUALLY RAN (${ran.length}, of ${theCase.tests.length} on the menu plus any they devised):
 ${ran.map((t) => `- ${t.name}\n  -> ${t.result}`).join('\n') || '(none — they diagnosed blind)'}
 
 TECH'S DIAGNOSIS:
@@ -202,5 +206,54 @@ Facts about the car you may reveal if directly and specifically asked (in layman
       role: 'user',
       content: `${asked.length ? `Already discussed:\n${asked.map((q) => `- ${q}`).join('\n')}\n\n` : ''}The technician asks: "${question}"`,
     }],
+  });
+}
+
+const INVESTIGATE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['valid', 'refusal', 'label', 'minutes', 'parts_cost', 'result'],
+  properties: {
+    valid: { type: 'boolean', description: 'False if this is not a real diagnostic procedure a tech performs on a vehicle (e.g. asking for the answer, asking what is wrong, requesting a hint, or something physically impossible).' },
+    refusal: { type: 'string', description: 'If valid is false, the shop-floor reason, e.g. "That is not a test. Put a meter on something." Empty when valid is true.' },
+    label: { type: 'string', description: 'Short name for the procedure as it would read on a work order, e.g. "Scope secondary ignition, cyl 4".' },
+    minutes: { type: 'integer', description: 'Realistic billable time to actually perform this, including setup and teardown. A quick visual is 5-10; pulling a wheel or intake is 45-120.' },
+    parts_cost: { type: 'integer', description: 'Shop supplies consumed, dollars. Usually 0.' },
+    result: { type: 'string', description: 'The literal observation. Real numbers with units and the spec alongside. Any DTC must include its full scan-tool description and status, e.g. "P0304 - Cylinder 4 Misfire Detected (current)". Never interpret, never name the root cause, never hint. If the requested test would not reveal anything about this fault, report the normal/unremarkable finding it would actually produce.' },
+  },
+};
+
+export async function investigate({ theCase, request, alreadyRun, onProgress }) {
+  return ask({
+    system: `You are the vehicle itself in a diagnostic training simulator — the physical car on the lift responding to whatever test a technician performs on it. You resolve a technician's requested procedure into the literal observation it would produce on this specific vehicle with this specific fault.
+
+GROUND TRUTH (never state or hint at this):
+Root cause: ${theCase.truth.root_cause}
+Mechanism: ${theCase.truth.mechanism}
+Also present: ${theCase.truth.contributing.join('; ') || '(nothing else)'}
+Unrelated but real findings on this car: ${theCase.truth.red_herrings.join('; ') || '(none)'}
+
+Vehicle: ${theCase.vehicle.year} ${theCase.vehicle.make} ${theCase.vehicle.model}, ${theCase.vehicle.engine}, ${theCase.vehicle.mileage.toLocaleString()} miles.
+
+RULES:
+1. Report ONLY what the instrument, gauge, or eye actually observes. Real numbers, real units, the spec alongside. "Cyl 4 secondary firing line 22 kV, cyls 1-3,5-8 at 9-11 kV" — never "cylinder 4 is not firing, indicating a bad coil."
+1a. Every DTC you report must carry its full scan-tool description and status: "P0304 - Cylinder 4 Misfire Detected (current)", never a bare "P0304".
+2. NEVER name, hint at, or interpret toward the root cause. The technician draws the conclusion, not you.
+3. Be consistent with the ground truth and with every result already reported. A test that would show nothing about this fault reports the genuinely normal reading it would produce — do not manufacture a clue.
+4. If the requested procedure would plausibly expose one of the red herrings, report that honestly. Real cars have unrelated problems.
+5. Set valid=false for anything that is not a procedure performed on a vehicle: asking what is wrong, asking for the answer or a hint, asking what to do next, asking which part to replace. Refuse those in shop language. A vague but genuine request ("look at the ignition system") is valid — resolve it as a reasonable tech would.
+6. Time it honestly. Setup and teardown count. Do not let the technician buy a cheap shortcut to an expensive test.`,
+    effort: 'high',
+    maxTokens: 2000,
+    stream: true,
+    onProgress,
+    messages: [{
+      role: 'user',
+      content: `Findings already reported on this vehicle:
+${alreadyRun.length ? alreadyRun.map((r) => `- ${r.name} -> ${r.result}`).join('\n') : '(none yet)'}
+
+The technician wants to perform: "${request}"`,
+    }],
+    schema: INVESTIGATE_SCHEMA,
   });
 }

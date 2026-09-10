@@ -1,5 +1,5 @@
 import { getKey, setKey, clearKey } from './api.js';
-import { DIFFICULTY, generateCase, judgeDiagnosis, askCustomer } from './cases.js';
+import { DIFFICULTY, generateCase, judgeDiagnosis, askCustomer, investigate } from './cases.js';
 import * as Rating from './rating.js';
 
 const $ = (id) => document.getElementById(id);
@@ -218,6 +218,7 @@ async function doAsk() {
   if (!q || state.done) return;
   $('ask-input').value = '';
   $('ask-btn').disabled = true;
+  $('ask-btn').textContent = 'Asking…';
   state.minutes += 3;
   pushLog('sys', 'You ask the customer', q, '3m');
   renderJob();
@@ -229,6 +230,41 @@ async function doAsk() {
     showError(e.message);
   } finally {
     $('ask-btn').disabled = false;
+    $('ask-btn').innerHTML = 'Ask <span class="px" style="color:var(--ink-faint);font-family:var(--mono);font-size:11px">3m</span>';
+    renderJob();
+  }
+}
+
+async function doInvestigate() {
+  const req = $('inv-input').value.trim();
+  if (!req || state.done) return;
+  clearError();
+  $('inv-btn').disabled = true;
+  $('inv-btn').textContent = 'Performing…';
+  try {
+    const alreadyRun = state.case.tests
+      .filter((t) => state.testsRun.includes(t.id))
+      .map((t) => ({ name: t.name, result: t.result }))
+      .concat(state.custom || []);
+
+    const r = await investigate({ theCase: state.case, request: req, alreadyRun });
+
+    if (!r.valid) {
+      // Nothing was performed, so nothing is billed.
+      pushLog('refused', 'Not a test', r.refusal || 'That is not something you can measure on the car.');
+    } else {
+      $('inv-input').value = '';
+      state.minutes += r.minutes;
+      state.cost += r.parts_cost;
+      (state.custom ||= []).push({ name: r.label, result: r.result });
+      pushLog('test', r.label, r.result,
+        `${r.minutes}m${r.parts_cost ? ` · $${r.parts_cost}` : ''}`);
+    }
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    $('inv-btn').disabled = false;
+    $('inv-btn').textContent = 'Perform test';
     renderJob();
   }
 }
@@ -242,7 +278,7 @@ async function commit() {
   $('commit-btn').disabled = true;
   try {
     const verdict = await judgeDiagnosis({
-      theCase: state.case, diagnosis, repair, testsRun: state.testsRun,
+      theCase: state.case, diagnosis, repair, testsRun: state.testsRun, custom: state.custom || [],
       onProgress: (n, phase) => busy(true, phase === 'thinking'
         ? 'Foreman is checking your work against the car…'
         : `Foreman is writing it up… ${(n / 1000).toFixed(1)}k`),
@@ -349,6 +385,10 @@ function init() {
   $('start-btn').onclick = startJob;
   $('commit-btn').onclick = commit;
   $('ask-btn').onclick = doAsk;
+  $('inv-btn').onclick = doInvestigate;
+  $('inv-input').onkeydown = (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); doInvestigate(); }
+  };
   $('ask-input').onkeydown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doAsk(); }
   };

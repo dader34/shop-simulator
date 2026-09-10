@@ -102,13 +102,27 @@
         </div>
 
         <div class="panel">
-          <h2>Ask the customer</h2>
+          <h2>Ask the customer <span class="h2note">&mdash; bills 3m shop time per question</span></h2>
           <div class="body">
             <div class="field" style="margin-bottom:8px">
               <textarea id="ask-input" rows="2" placeholder="Does it do it cold, or only after it warms up?"></textarea>
             </div>
             <div class="row-actions">
-              <button id="ask-btn">Ask (3 min)</button>
+              <button id="ask-btn">Ask <span class="px">3m</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Investigate <span class="h2note">&mdash; any test not on the menu</span></h2>
+          <div class="body">
+            <div class="field" style="margin-bottom:8px">
+              <textarea id="inv-input" rows="2" placeholder="Scope secondary ignition on cylinder 4 and compare to the other cylinders."></textarea>
+              <div class="hint">Describe the procedure the way you'd write it on a ticket. Time is billed
+              based on what the job actually takes.</div>
+            </div>
+            <div class="row-actions">
+              <button id="inv-btn">Perform test</button>
             </div>
           </div>
         </div>

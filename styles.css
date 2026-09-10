@@ -192,3 +192,15 @@ table.hist .ok { color: var(--good); }
 table.hist .bad { color: var(--bad); }
 
 .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Inline note inside a panel heading */
+.h2note {
+  color: var(--ink-faint);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+}
+
+/* A request the car can't answer — not a test */
+.entry.refused .who { color: #b0763a; }
+.entry.refused .txt { color: #d9a86a; font-style: italic; }
