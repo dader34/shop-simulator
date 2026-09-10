@@ -57,7 +57,9 @@ const CASE_SCHEMA = {
     },
     tests: {
       type: 'array',
-      minItems: 8,
+      // Structured outputs only accepts minItems 0 or 1, so the 10-16 count is
+      // enforced in the prompt and floored below instead.
+      minItems: 1,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -116,6 +118,9 @@ Build the ground truth first, then write every test result to be consistent with
     schema: CASE_SCHEMA,
   });
 
+  if (!Array.isArray(json.tests) || json.tests.length < 6) {
+    throw new Error('Case came back with too few tests. Try opening the work order again.');
+  }
   json.tests.forEach((t, i) => { if (!t.id) t.id = `t${i}`; });
   return json;
 }
