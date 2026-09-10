@@ -22,7 +22,8 @@ function loadState() {
     const raw = localStorage.getItem(JOB_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    return s && s.case && s.case.tests ? s : null;
+    // Jobs saved before the test menu was removed can't be resumed.
+    return s && s.case && s.case.key_findings ? s : null;
   } catch {
     return null;
   }
@@ -105,7 +106,7 @@ async function startJob() {
     state = {
       case: c,
       difficulty,
-      testsRun: [],
+      custom: [],
       log: [],
       minutes: 0,
       cost: 0,
@@ -127,10 +128,8 @@ function pushLog(kind, who, txt, costLabel = '') {
 }
 
 function parMinutes() {
-  // Par = the time a clean diagnostic path would take: roughly the decisive
-  // half of the test menu.
-  const all = state.case.tests.map((t) => t.minutes).sort((a, b) => a - b);
-  return all.slice(0, Math.ceil(all.length / 2)).reduce((a, b) => a + b, 0);
+  // The case carries the time a clean diagnostic path would take.
+  return state.case.par_minutes || 90;
 }
 
 function renderJob() {
@@ -152,7 +151,7 @@ function renderJob() {
     <div style="text-align:right">
       <div class="stat">TIME ON JOB <b>${(state.minutes / 60).toFixed(1)} hr</b></div>
       <div class="stat">BILLED <b>$${(state.minutes / 60 * c.ro.labor_rate + state.cost).toFixed(0)}</b></div>
-      <div class="stat">TESTS <b>${state.testsRun.length}/${c.tests.length}</b></div>
+      <div class="stat">TESTS RUN <b>${(state.custom || []).length}</b></div>
     </div>`;
 
   $('complaint').innerHTML = `<blockquote class="complaint">"${esc(c.ro.complaint)}"</blockquote>` +
@@ -161,7 +160,6 @@ function renderJob() {
       : '');
 
   renderLog();
-  renderTests();
 
   $('commit-wrap').classList.toggle('hidden', state.done);
 }
@@ -173,44 +171,6 @@ function renderLog() {
       <div class="txt">${esc(e.txt)}</div>
     </div>`).join('');
   $('log').scrollTop = $('log').scrollHeight;
-}
-
-function renderTests() {
-  if (state.done) { $('tests').innerHTML = '<div class="hint">Job closed.</div>'; return; }
-  const groups = {};
-  state.case.tests.forEach((t) => { (groups[t.group] ||= []).push(t); });
-
-  $('tests').innerHTML = Object.entries(groups).map(([g, list]) => `
-    <div class="groupname">${esc(g)}</div>
-    <div class="testlist">
-      ${list.map((t) => {
-        const done = state.testsRun.includes(t.id);
-        const price = t.parts_cost
-          ? `${t.minutes}m · $${t.parts_cost}`
-          : `${t.minutes}m`;
-        return `<button class="testbtn ${done ? 'done' : ''}" data-t="${t.id}" ${done ? 'disabled' : ''}>
-          <span class="nm">${esc(t.name)}</span><span class="px">${price}</span></button>`;
-      }).join('')}
-    </div>`).join('');
-
-  $('tests').querySelectorAll('button[data-t]').forEach((b) => {
-    b.onclick = () => runTest(b.dataset.t);
-  });
-}
-
-function runTest(id) {
-  const t = state.case.tests.find((x) => x.id === id);
-  if (!t || state.testsRun.includes(id)) return;
-  state.testsRun.push(id);
-  state.minutes += t.minutes;
-  state.cost += t.parts_cost;
-  pushLog(
-    t.group === 'Interview' ? 'cust' : 'test',
-    t.group === 'Interview' ? `Customer — ${t.name}` : t.name,
-    t.result,
-    `${t.minutes}m${t.parts_cost ? ` · $${t.parts_cost}` : ''}`,
-  );
-  renderJob();
 }
 
 async function doAsk() {
@@ -242,10 +202,7 @@ async function doInvestigate() {
   $('inv-btn').disabled = true;
   $('inv-btn').textContent = 'Performing…';
   try {
-    const alreadyRun = state.case.tests
-      .filter((t) => state.testsRun.includes(t.id))
-      .map((t) => ({ name: t.name, result: t.result }))
-      .concat(state.custom || []);
+    const alreadyRun = state.custom || [];
 
     const r = await investigate({ theCase: state.case, request: req, alreadyRun });
 
@@ -278,7 +235,7 @@ async function commit() {
   $('commit-btn').disabled = true;
   try {
     const verdict = await judgeDiagnosis({
-      theCase: state.case, diagnosis, repair, testsRun: state.testsRun, custom: state.custom || [],
+      theCase: state.case, diagnosis, repair, testsRun: [], custom: state.custom || [],
       onProgress: (n, phase) => busy(true, phase === 'thinking'
         ? 'Foreman is checking your work against the car…'
         : `Foreman is writing it up… ${(n / 1000).toFixed(1)}k`),

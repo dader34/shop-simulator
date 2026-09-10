@@ -204,3 +204,8 @@ table.hist .bad { color: var(--bad); }
 /* A request the car can't answer — not a test */
 .entry.refused .who { color: #b0763a; }
 .entry.refused .txt { color: #d9a86a; font-style: italic; }
+
+/* Job screen is a single column now that there is no test menu — cap the
+   measure so the diagnostic log stays readable on a wide display. */
+.jobcols { max-width: 860px; }
+.jobcols #log { max-height: none; }

@@ -11,7 +11,7 @@ export const DIFFICULTY = {
 const CASE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['vehicle', 'ro', 'truth', 'tests', 'customer_persona'],
+  required: ['vehicle', 'ro', 'truth', 'par_minutes', 'key_findings', 'customer_persona'],
   properties: {
     vehicle: {
       type: 'object',
@@ -55,24 +55,21 @@ const CASE_SCHEMA = {
         why_missed: { type: 'string', description: 'Why a competent tech commonly misdiagnoses this.' },
       },
     },
-    tests: {
+    par_minutes: { type: 'integer', description: 'Total billable minutes a competent technician needs to isolate this fault by the most direct sound diagnostic path, including the initial scan and verification. Do not pad it.' },
+    key_findings: {
       type: 'array',
-      // Structured outputs only accepts minItems 0 or 1, so the 10-16 count is
-      // enforced in the prompt and floored below instead.
       minItems: 1,
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'group', 'name', 'minutes', 'parts_cost', 'result'],
+        required: ['procedure', 'minutes', 'result'],
         properties: {
-          id: { type: 'string' },
-          group: { type: 'string', enum: ['Interview', 'Scan', 'Visual', 'Electrical', 'Mechanical', 'Road Test'] },
-          name: { type: 'string', description: 'What the tech does, e.g. "Fuel pressure at rail, key on engine running".' },
-          minutes: { type: 'integer', description: 'Realistic billable time for this test.' },
-          parts_cost: { type: 'integer', description: 'Consumables/shop supplies in dollars, usually 0.' },
-          result: { type: 'string', description: 'The literal result the tech observes. Real numbers with units. Every DTC must include its full scan-tool description and status, e.g. "P0304 - Cylinder 4 Misfire Detected (current), P0316 - Misfire Detected On Startup (history)". Do NOT interpret it, do NOT hint at the answer. Report what the tool says.' },
+          procedure: { type: 'string', description: 'A test a technician might perform on this vehicle, e.g. "Fuel pressure at rail, KOER".' },
+          minutes: { type: 'integer', description: 'Realistic billable time for it.' },
+          result: { type: 'string', description: 'The literal observation with real numbers, units, and spec. Every DTC must include its full scan-tool description and status, e.g. "P0304 - Cylinder 4 Misfire Detected (current)". Never interpreted, never hinting at the cause.' },
         },
       },
+      description: 'Pre-derived results for 8-14 procedures a tech is likely to attempt: the decisive path, several dead ends, and anything exposing a red herring. NEVER shown to the technician as a menu - used only to keep answers consistent when they devise their own tests.',
     },
     customer_persona: { type: 'string', description: 'How this customer talks: helpful, defensive, vague, in a hurry, knows just enough to be dangerous, etc.' },
   },
@@ -114,17 +111,17 @@ Difficulty ${difficulty} means: ${d.desc}
 
 ${focusLine}
 
-Provide 10 to 16 tests spanning the groups. The "Interview" group holds questions the tech asks the customer; their results are the customer's spoken answer.${avoidLine}
+The technician is NOT given a list of tests — they must decide what to check themselves. Supply key_findings as your own private consistency notes: 8 to 14 procedures a tech would plausibly attempt on this complaint, each with the literal result. Cover the decisive diagnostic path, several reasonable dead ends that reveal nothing, and anything that would surface a red herring. Set par_minutes to the time the most direct sound path would take.${avoidLine}
 
 Build the ground truth first, then write every test result to be consistent with it.`,
     }],
     schema: CASE_SCHEMA,
   });
 
-  if (!Array.isArray(json.tests) || json.tests.length < 6) {
-    throw new Error('Case came back with too few tests. Try opening the work order again.');
+  if (!Array.isArray(json.key_findings) || json.key_findings.length < 4) {
+    throw new Error('Case came back underspecified. Try opening the work order again.');
   }
-  json.tests.forEach((t, i) => { if (!t.id) t.id = `t${i}`; });
+  if (!json.par_minutes || json.par_minutes < 15) json.par_minutes = 90;
   return json;
 }
 
@@ -154,10 +151,7 @@ const VERDICT_SCHEMA = {
 };
 
 export async function judgeDiagnosis({ theCase, diagnosis, repair, testsRun, custom = [], onProgress }) {
-  const ran = theCase.tests
-    .filter((t) => testsRun.includes(t.id))
-    .map((t) => ({ name: t.name, result: t.result }))
-    .concat(custom);
+  const ran = custom;
   return ask({
     system: `You are a master technician and shop foreman evaluating a tech's diagnosis against known ground truth. You are fair but exacting: a diagnosis is correct only if it identifies the actual failed component or condition. Naming the right system but the wrong part is not correct. If a contributing fault was left unaddressed, the car comes back. Speak like a foreman on the shop floor — direct, no corporate padding, no praise the work didn't earn. Whenever you cite a DTC, include its full description, e.g. "P0304 - Cylinder 4 Misfire Detected", never a bare code.`,
     effort: 'high',
@@ -175,7 +169,7 @@ Red herrings: ${theCase.truth.red_herrings.join('; ') || '(none)'}
 CUSTOMER PERSONA: ${theCase.customer_persona}
 COMPLAINT: "${theCase.ro.complaint}"
 
-TESTS THE TECH ACTUALLY RAN (${ran.length}, of ${theCase.tests.length} on the menu plus any they devised):
+TESTS THE TECH DEVISED AND RAN (${ran.length}):
 ${ran.map((t) => `- ${t.name}\n  -> ${t.result}`).join('\n') || '(none — they diagnosed blind)'}
 
 TECH'S DIAGNOSIS:
@@ -234,6 +228,9 @@ Also present: ${theCase.truth.contributing.join('; ') || '(nothing else)'}
 Unrelated but real findings on this car: ${theCase.truth.red_herrings.join('; ') || '(none)'}
 
 Vehicle: ${theCase.vehicle.year} ${theCase.vehicle.make} ${theCase.vehicle.model}, ${theCase.vehicle.engine}, ${theCase.vehicle.mileage.toLocaleString()} miles.
+
+PRE-DERIVED RESULTS for procedures on this vehicle (your consistency reference — if the technician's request matches or overlaps one of these, report a result consistent with it; if it is something else entirely, derive it yourself from the ground truth):
+${(theCase.key_findings || []).map((f) => `- ${f.procedure} (${f.minutes}m) -> ${f.result}`).join('\n') || '(none)'}
 
 RULES:
 1. Report ONLY what the instrument, gauge, or eye actually observes. Real numbers, real units, the spec alongside. "Cyl 4 secondary firing line 22 kV, cyls 1-3,5-8 at 9-11 kV" — never "cylinder 4 is not firing, indicating a bad coil."

@@ -74,8 +74,9 @@
           <div class="body" style="color:var(--ink-dim);font-size:13px">
             <p style="margin-top:0">A case is built root-cause-first, so every code, reading, and
             customer answer is derived from one real failure. Nothing you see is a hint.</p>
-            <p>Each test costs time and shop supplies. Interview the customer, pull codes, test
-            what you need &mdash; then commit to a diagnosis and a repair.</p>
+            <p>No test menu. You decide what to check and write it up yourself, the way you
+            would on a real ticket &mdash; the car answers with what the tool actually reads,
+            and bills you for the time.</p>
             <p style="margin-bottom:0">Get it wrong, or leave a contributing fault unaddressed, and
             the car comes back. Your rating moves with the difficulty you beat.</p>
           </div>
@@ -94,7 +95,7 @@
       </div>
     </div>
 
-    <div class="cols">
+    <div class="jobcols">
       <div>
         <div class="panel">
           <h2>Diagnostic log</h2>
@@ -114,10 +115,10 @@
         </div>
 
         <div class="panel">
-          <h2>Investigate <span class="h2note">&mdash; any test not on the menu</span></h2>
+          <h2>Investigate <span class="h2note">&mdash; run any test you can name</span></h2>
           <div class="body">
             <div class="field" style="margin-bottom:8px">
-              <textarea id="inv-input" rows="2" placeholder="Scope secondary ignition on cylinder 4 and compare to the other cylinders."></textarea>
+              <textarea id="inv-input" rows="2" placeholder="Pull codes. / Scope secondary ignition on cyl 4 and compare to the rest. / Swap the #4 coil with #6 and see if the misfire follows."></textarea>
               <div class="hint">Describe the procedure the way you'd write it on a ticket. Time is billed
               based on what the job actually takes.</div>
             </div>
@@ -148,12 +149,6 @@
         <div id="result" class="hidden"></div>
       </div>
 
-      <div>
-        <div class="panel">
-          <h2>Tests &amp; inspections</h2>
-          <div class="body" id="tests"></div>
-        </div>
-      </div>
     </div>
   </section>
 

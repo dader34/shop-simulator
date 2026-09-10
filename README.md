@@ -24,10 +24,15 @@ Roughly $0.15–0.40 per job at current Opus rates.
 ## How a case is built
 
 Every case is generated ground-truth-first: Claude decides the actual failure, then
-derives every fault code, sensor reading, and customer answer from it. Test results
-are raw observations — `Fuel pressure 38 psi KOER, spec 55-62` — never conclusions.
-The test menu deliberately includes dead ends and at least one perfectly normal
-result, so the menu itself gives nothing away.
+derives every fault code, sensor reading, and customer answer from it. Results are
+raw observations — `Fuel pressure 38 psi KOER, spec 55-62` — never conclusions, and
+every DTC carries its full scan-tool description.
+
+There is no test menu. You are given the complaint and the vehicle, and you decide
+what to check — describe any procedure the way you'd write it on a ticket and the
+car answers with what the tool actually reads, billed at realistic time for the job.
+Requests that try to skip the work ("what's wrong with it?") are refused and bill
+nothing.
 
 Red herrings are real: a weeping gasket, a stored code from a dead battery, a cheap
 aftermarket part that works fine. They are the kind of ugly-but-irrelevant findings
@@ -49,7 +54,7 @@ and engine codes and BMW-specific fault codes and module names (DME, DDE, CAS, F
 ## Scoring
 
 Commit a diagnosis and the repair you performed. The foreman checks it against ground
-truth. Name the right system but the wrong part and it counts as a miss. Leave a
+truth, and sees every test you devised. Name the right system but the wrong part and it counts as a miss. Leave a
 contributing fault unaddressed and the car comes back days later with a new complaint.
 
 Rating is Elo-style: each difficulty is a fixed opponent, so beating a level above your
