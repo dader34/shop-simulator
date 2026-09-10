@@ -108,7 +108,11 @@ async function readStream(res, onProgress) {
 
       if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
         text += ev.delta.text;
-        onProgress?.(text.length);
+        onProgress?.(text.length, 'writing');
+      } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'thinking_delta') {
+        // Thinking can run for a while before any text appears; report it so the
+        // UI doesn't look frozen at zero.
+        onProgress?.(text.length, 'thinking');
       } else if (ev.type === 'message_delta' && ev.delta?.stop_reason === 'refusal') {
         refused = true;
       } else if (ev.type === 'error') {
