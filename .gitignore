@@ -1,0 +1,9 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.key
+secrets.json
+
+.DS_Store
+node_modules/

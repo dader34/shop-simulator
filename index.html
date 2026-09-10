@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop Tech Simulator</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="bar">
+    <h1>Shop Tech Simulator</h1>
+    <span class="bar-spacer"></span>
+    <span id="bar-stats" style="display:flex;gap:16px;flex-wrap:wrap"></span>
+  </header>
+
+  <div id="error" class="err hidden"></div>
+  <div id="busy" class="working hidden"><span class="spinner"></span><span id="busy-msg"></span></div>
+
+  <!-- ============ SETUP ============ -->
+  <section id="screen-setup">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h2>Pull a job</h2>
+          <div class="body">
+            <div class="field">
+              <label>Difficulty</label>
+              <div class="diffgrid" id="diffgrid"></div>
+              <div class="hint" id="diff-desc"></div>
+              <div class="hint" id="rec-note"></div>
+            </div>
+            <div class="field">
+              <label>Vehicle pool</label>
+              <select id="focus-select">
+                <option value="mixed">All makes (with BMWs mixed in)</option>
+                <option value="bmw">BMW only</option>
+              </select>
+            </div>
+            <button class="primary" id="start-btn">Open work order</button>
+          </div>
+        </div>
+
+        <div class="panel hidden" id="history-wrap">
+          <h2>Recent jobs</h2>
+          <div class="body" style="padding-top:4px">
+            <table class="hist" id="history"></table>
+            <div class="row-actions" style="margin-top:12px">
+              <button class="danger" id="reset-btn">Reset rating &amp; history</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2>API key</h2>
+          <div class="body">
+            <div class="field">
+              <input id="key-input" type="password" placeholder="sk-ant-..." autocomplete="off">
+              <div class="hint" id="key-status"></div>
+            </div>
+            <button id="key-save">Save key</button>
+            <div class="hint" style="margin-top:10px">
+              Stored in this browser's localStorage only, and sent directly to
+              api.anthropic.com. Roughly $0.15&ndash;0.40 per job at current Opus rates.
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>How it works</h2>
+          <div class="body" style="color:var(--ink-dim);font-size:13px">
+            <p style="margin-top:0">A case is built root-cause-first, so every code, reading, and
+            customer answer is derived from one real failure. Nothing you see is a hint.</p>
+            <p>Each test costs time and shop supplies. Interview the customer, pull codes, test
+            what you need &mdash; then commit to a diagnosis and a repair.</p>
+            <p style="margin-bottom:0">Get it wrong, or leave a contributing fault unaddressed, and
+            the car comes back. Your rating moves with the difficulty you beat.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ JOB ============ -->
+  <section id="screen-job" class="hidden">
+    <div class="panel">
+      <h2>Repair order</h2>
+      <div class="body">
+        <div class="ro-head" id="ro-head"></div>
+        <div id="complaint"></div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h2>Diagnostic log</h2>
+          <div id="log"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Ask the customer</h2>
+          <div class="body">
+            <div class="field" style="margin-bottom:8px">
+              <textarea id="ask-input" rows="2" placeholder="Does it do it cold, or only after it warms up?"></textarea>
+            </div>
+            <div class="row-actions">
+              <button id="ask-btn">Ask (3 min)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" id="commit-wrap">
+          <h2>Close the ticket</h2>
+          <div class="body">
+            <div class="field">
+              <label>Your diagnosis &mdash; what failed and why</label>
+              <textarea id="diagnosis" rows="3" placeholder="Be specific. Name the component and the mechanism."></textarea>
+            </div>
+            <div class="field">
+              <label>Repair performed</label>
+              <textarea id="repair" rows="2" placeholder="Everything you replaced, cleaned, reprogrammed, or adjusted."></textarea>
+            </div>
+            <div class="row-actions">
+              <button class="primary" id="commit-btn">Commit &amp; deliver vehicle</button>
+              <button class="danger" id="abandon-btn">Abandon job</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="result" class="hidden"></div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2>Tests &amp; inspections</h2>
+          <div class="body" id="tests"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
