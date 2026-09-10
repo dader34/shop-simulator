@@ -96,7 +96,10 @@ async function startJob() {
   busy(true, `Writing a level ${difficulty} repair order…`);
   $('start-btn').disabled = true;
   try {
-    const c = await generateCase({ difficulty, focus, avoid: profile.recentCauses.slice(-6) });
+    const c = await generateCase({
+      difficulty, focus, avoid: profile.recentCauses.slice(-6),
+      onProgress: (n) => busy(true, `Writing a level ${difficulty} repair order… ${(n / 1000).toFixed(1)}k`),
+    });
     state = {
       case: c,
       difficulty,
@@ -238,6 +241,7 @@ async function commit() {
   try {
     const verdict = await judgeDiagnosis({
       theCase: state.case, diagnosis, repair, testsRun: state.testsRun,
+      onProgress: (n) => busy(true, `Foreman is reviewing your work… ${(n / 1000).toFixed(1)}k`),
     });
     finishJob(verdict, diagnosis);
   } catch (e) {

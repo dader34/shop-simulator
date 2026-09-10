@@ -11,7 +11,7 @@ export function clearKey() { localStorage.removeItem('sts_key'); }
  * One Messages API call. When `schema` is given, uses structured outputs so the
  * response is guaranteed-valid JSON matching it, and returns the parsed object.
  */
-export async function ask({ system, messages, schema, effort = 'high', maxTokens = 8000 }) {
+export async function ask({ system, messages, schema, effort = 'high', maxTokens = 8000, stream = false, onProgress }) {
   const key = getKey();
   if (!key) throw new Error('No API key set.');
 
@@ -26,6 +26,7 @@ export async function ask({ system, messages, schema, effort = 'high', maxTokens
   if (schema) {
     body.output_config.format = { type: 'json_schema', schema };
   }
+  if (stream) body.stream = true;
 
   const res = await fetch(API_URL, {
     method: 'POST',
@@ -47,6 +48,11 @@ export async function ask({ system, messages, schema, effort = 'high', maxTokens
     throw new Error(detail);
   }
 
+  if (stream) {
+    const text = await readStream(res, onProgress);
+    return schema ? parseJson(text) : text;
+  }
+
   const data = await res.json();
   if (data.stop_reason === 'refusal') {
     throw new Error('The model declined this request. Try regenerating the case.');
@@ -58,7 +64,10 @@ export async function ask({ system, messages, schema, effort = 'high', maxTokens
     .join('');
 
   if (!schema) return text;
+  return parseJson(text);
+}
 
+function parseJson(text) {
   try {
     return JSON.parse(text);
   } catch {
@@ -67,4 +76,48 @@ export async function ask({ system, messages, schema, effort = 'high', maxTokens
     if (m) return JSON.parse(m[0]);
     throw new Error('Could not parse model response as JSON.');
   }
+}
+
+/**
+ * Read an SSE stream, accumulating text deltas. Streaming keeps a long
+ * generation from tripping request timeouts and lets the UI show progress
+ * instead of sitting blank.
+ */
+async function readStream(res, onProgress) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let text = '';
+  let refused = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+
+      let ev;
+      try { ev = JSON.parse(payload); } catch { continue; }
+
+      if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+        text += ev.delta.text;
+        onProgress?.(text.length);
+      } else if (ev.type === 'message_delta' && ev.delta?.stop_reason === 'refusal') {
+        refused = true;
+      } else if (ev.type === 'error') {
+        throw new Error(ev.error?.message || 'Stream error.');
+      }
+    }
+  }
+
+  if (refused) throw new Error('The model declined this request. Try regenerating the case.');
+  if (!text) throw new Error('Empty response from the model.');
+  return text;
 }

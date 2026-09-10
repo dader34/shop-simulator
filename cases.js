@@ -89,7 +89,7 @@ You write realistic repair-order scenarios. Absolute rules:
 5. TEST MENU MUST BE HONEST. Include tests that lead nowhere alongside the ones that matter, so the menu itself is not a hint. Order them naturally, not by usefulness. Include at least one test whose result is completely normal.
 6. The customer complaint is written in the customer's own words with their own misunderstandings, not in technical language.`;
 
-export async function generateCase({ difficulty, focus, avoid = [] }) {
+export async function generateCase({ difficulty, focus, avoid = [], onProgress }) {
   const d = DIFFICULTY[difficulty];
   const avoidLine = avoid.length
     ? `\n\nThe technician has recently worked these root causes — pick something clearly different:\n${avoid.map((a) => `- ${a}`).join('\n')}`
@@ -103,6 +103,8 @@ export async function generateCase({ difficulty, focus, avoid = [] }) {
     system: SYSTEM,
     effort: 'high',
     maxTokens: 12000,
+    stream: true,
+    onProgress,
     messages: [{
       role: 'user',
       content: `Create one diagnostic case at difficulty ${difficulty}/5 — "${d.name}".
@@ -150,11 +152,13 @@ const VERDICT_SCHEMA = {
   },
 };
 
-export async function judgeDiagnosis({ theCase, diagnosis, repair, testsRun }) {
+export async function judgeDiagnosis({ theCase, diagnosis, repair, testsRun, onProgress }) {
   const ran = theCase.tests.filter((t) => testsRun.includes(t.id));
   return ask({
     system: `You are a master technician and shop foreman evaluating a tech's diagnosis against known ground truth. You are fair but exacting: a diagnosis is correct only if it identifies the actual failed component or condition. Naming the right system but the wrong part is not correct. If a contributing fault was left unaddressed, the car comes back. Speak like a foreman on the shop floor — direct, no corporate padding, no praise the work didn't earn.`,
     effort: 'high',
+    stream: true,
+    onProgress,
     messages: [{
       role: 'user',
       content: `GROUND TRUTH
